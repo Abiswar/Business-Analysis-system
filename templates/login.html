@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login | AI Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+  <body class="login-page">
+    <div class="login-shell">
+      <div class="login-card">
+        <div class="brand-block">
+          <div class="brand-mark">AI</div>
+          <h1>Company intelligence, built for your team.</h1>
+        </div>
+        {% if request.args.get('registered') %}
+        <div class="status-banner">Your company workspace is ready. Sign in with your email and password.</div>
+        {% endif %}
+        {% if error %}
+        <div class="alert error">{{ error }}</div>
+        {% endif %}
+        <form method="POST" action="{{ url_for('login') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label for="username">Email address</label>
+          <input id="username" name="email" type="email" placeholder="you@company.com" autocomplete="email" required />
+
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required />
+
+          <div class="remember-row">
+            <label><input type="checkbox" name="remember_me" /> Remember Me</label>
+          </div>
+
+          <button type="submit" class="primary-btn">Login</button>
+        </form>
+        <div class="auth-footer">
+          <span>New to the dashboard?</span>
+          <a class="text-link" href="{{ url_for('signup') }}">Create your company workspace</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

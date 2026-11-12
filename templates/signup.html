@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create company workspace | AI Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+  <body class="login-page">
+    <div class="login-shell">
+      <div class="login-card">
+        <div class="brand-block">
+          <div class="brand-mark">AI</div>
+          <h1>Create your company workspace</h1>
+          <p class="muted-copy">Register an administrator account. Only this workspace’s admin can see its company data.</p>
+        </div>
+        {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+        <form method="POST" action="{{ url_for('signup') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label for="full-name">Your name</label>
+          <input id="full-name" name="full_name" type="text" maxlength="100" autocomplete="name" required />
+          <label for="email">Gmail or work email</label>
+          <input id="email" name="email" type="email" maxlength="254" autocomplete="email" placeholder="you@company.com" required />
+          <label for="company-name">Company name</label>
+          <input id="company-name" name="company_name" type="text" maxlength="120" autocomplete="organization" placeholder="Your company" required />
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" minlength="12" autocomplete="new-password" required />
+          <small class="muted-copy">Use at least 12 characters. Your financial workspace is private to your company admin.</small>
+          <button type="submit" class="primary-btn">Create admin account</button>
+        </form>
+        <div class="auth-footer">
+          <span>Already registered?</span>
+          <a class="text-link" href="{{ url_for('login') }}">Sign in</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

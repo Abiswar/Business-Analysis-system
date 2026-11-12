@@ -1,0 +1,250 @@
+{% extends 'layout.html' %}
+
+{% block page_title %}AI Business Pulse{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <p class="eyebrow">Decision intelligence</p>
+    <h2>AI Business Pulse</h2>
+  </div>
+  <div class="date-filter">
+    <label for="pulse-days">Range</label>
+    <select id="pulse-days">
+      <option value="1">Today</option>
+      <option value="7">Last 7 days</option>
+      <option value="30" selected>Last 30 days</option>
+      <option value="90">Last 90 days</option>
+    </select>
+  </div>
+</div>
+
+<div id="pulse-message" class="status-banner" role="status"></div>
+
+<div class="pulse-layout">
+  <section class="panel">
+    <div class="panel-header"><h3>Business Health Score</h3></div>
+    <div id="health-score-content" class="health-card"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><h3>Detected Business Alerts</h3></div>
+    <div id="alert-list" class="alert-list"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><h3>Root-Cause Investigation</h3></div>
+    <div id="investigation-content"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><h3>AI Recommendations</h3></div>
+    <div id="recommendation-list"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><h3>Business Decision Simulator</h3></div>
+    <form id="scenario-form" class="scenario-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <label class="scenario-name">Scenario name<input type="text" name="scenario_name" value="Growth planning" maxlength="80" /></label>
+      <div class="input-grid">
+        <label>Order volume change (%)<input type="number" name="order_change" value="5" /></label>
+        <label>Average order value change (%)<input type="number" name="aov_change" value="3" /></label>
+        <label>Repeat-purchase change (%)<input type="number" name="repeat_change" value="4" /></label>
+        <label>Inactivity reduction (%)<input type="number" name="inactivity_change" value="2" /></label>
+        <label>Category growth (%)<input type="number" name="category_change" value="6" /></label>
+      </div>
+      <button type="submit" class="primary-btn">Calculate scenario</button>
+    </form>
+    <div id="scenario-result" class="scenario-result"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><h3>Saved planning scenarios</h3></div>
+    <div id="saved-scenarios"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><h3>Recommendation Outcome Tracker</h3></div>
+    <div id="outcome-list"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><h3>Historical Business Insights</h3></div>
+    <div id="history-list"></div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const pulseDays = document.getElementById('pulse-days');
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+})[character]);
+const money = value => '$' + Number(value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+async function fetchJson(url, options={}) {
+  const response = await fetch(url, options);
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || 'Request failed');
+  }
+  return payload;
+}
+
+function renderAlerts(alerts) {
+  document.getElementById('alert-list').innerHTML = (alerts || []).map(alert => {
+    const state = String(alert.status || 'open').toLowerCase();
+    const nextStatus = state === 'open' ? 'acknowledged' : 'resolved';
+    const action = state === 'open' ? 'Acknowledge' : state === 'acknowledged' ? 'Resolve' : 'Resolved';
+    return `
+      <div class="alert-item severity-${escapeHtml(String(alert.severity || 'informational').toLowerCase())}">
+        <div class="alert-title-row">
+          <h4>${escapeHtml(alert.metric_name)}</h4><span class="badge">${escapeHtml(alert.severity)} · ${escapeHtml(state)}</span>
+        </div>
+        <p>${escapeHtml(alert.explanation)}</p>
+        <small>Change ${Number(alert.change_percentage || 0).toFixed(2)}% · Current ${money(alert.current_value)}</small>
+        ${state === 'resolved' ? '' : `<button class="small-btn alert-status-button" data-alert-id="${Number(alert.id)}" data-status="${nextStatus}">${action}</button>`}
+      </div>`;
+  }).join('') || '<p>No alerts for this period.</p>';
+}
+
+function renderRecommendations(recommendations) {
+  document.getElementById('recommendation-list').innerHTML = (recommendations || []).map(item => `
+    <div class="recommendation-item">
+      <div class="alert-title-row"><h4>${escapeHtml(item.title)}</h4><span class="badge">${escapeHtml(item.priority)}</span></div>
+      <p>${escapeHtml(item.description)}</p>
+      <small>Expected benefit: ${escapeHtml(item.expected_benefit || 'Not enough data to estimate impact.')}</small>
+      <div class="recommendation-actions">
+        <span class="muted-copy">Status: ${escapeHtml(item.status || 'New')}</span>
+        ${item.status === 'New' ? `<button data-recommendation-id="${Number(item.id)}" data-status="Accepted" class="small-btn">Accept</button><button data-recommendation-id="${Number(item.id)}" data-status="Rejected" class="small-btn alt">Reject</button>` : ''}
+      </div>
+    </div>
+  `).join('') || '<p>No recommendations available for this period.</p>';
+}
+
+async function loadPulse() {
+  const days = pulseDays.value || '30';
+  document.getElementById('pulse-message').textContent = 'Refreshing business intelligence…';
+  const summary = await fetchJson('{{ url_for("business_pulse_summary") }}?days=' + encodeURIComponent(days));
+  const alerts = await fetchJson('{{ url_for("business_pulse_alerts") }}');
+  const history = await fetchJson('{{ url_for("history_api") }}');
+  const outcomes = await fetchJson('{{ url_for("outcomes_api") }}');
+  const scenarios = await fetchJson('{{ url_for("scenarios_api") }}');
+  const storedAlerts = new Map((alerts.alerts || []).map(alert => [Number(alert.id), alert]));
+  summary.alerts = (summary.alerts || []).map(alert => ({
+    ...alert,
+    status: storedAlerts.get(Number(alert.id))?.status || 'open'
+  }));
+  renderRecommendations(summary.recommendations);
+  renderAlerts(summary.alerts);
+  document.getElementById('pulse-message').textContent = summary.message || '';
+  document.getElementById('health-score-content').innerHTML = `
+    <div class="score-line">
+      <div class="score-display">${escapeHtml(summary.health_score ?? 'N/A')}</div>
+      <div>
+        <strong>${escapeHtml(summary.health_category ?? 'Insufficient data')}</strong>
+        <p>${escapeHtml(summary.explanation || '')}</p>
+      </div>
+    </div>
+    <div class="score-meta"><span>Previous period: ${escapeHtml(summary.previous_period_score ?? 'N/A')}</span><span>Change: ${escapeHtml(summary.score_change ?? 'N/A')}</span></div>
+    <ul class="factor-list">
+      ${(summary.factors || []).map(f => `<li><strong>${escapeHtml(f.name)}:</strong> ${escapeHtml(f.value)} (${escapeHtml(f.weight)})</li>`).join('') || '<li>Insufficient data</li>'}
+    </ul>
+  `;
+  document.getElementById('history-list').innerHTML = (history.history || []).slice(0,5).map(item => `<div class="history-item"><strong>${escapeHtml(item.insight_type)}</strong><p>${escapeHtml(item.summary)}</p><small>${escapeHtml(item.created_at)}</small></div>`).join('') || '<p>No previous insight history.</p>';
+  document.getElementById('outcome-list').innerHTML = (outcomes.outcomes || []).slice(0,5).map(item => `
+    <div class="outcome-item">
+      <strong>${escapeHtml(item.recommendation_title || 'Recommendation action')}</strong>
+      <p>Status: ${escapeHtml(item.status)}</p>
+    </div>
+  `).join('') || '<p>No tracked outcomes yet.</p>';
+  document.getElementById('saved-scenarios').innerHTML = (scenarios.scenarios || []).slice(0,5).map(item => {
+    const result = JSON.parse(item.result_json || '{}');
+    return `<div class="history-item"><strong>${escapeHtml(item.scenario_name)}</strong><p>Estimate: ${money(result.hypothetical_revenue)} (${Number(result.percentage_difference || 0).toFixed(2)}%)</p><small>Saved ${escapeHtml(item.created_at)}</small></div>`;
+  }).join('') || '<p>No saved scenarios yet.</p>';
+  const firstAlert = (summary.alerts || [])[0];
+  if (firstAlert) {
+    const investigation = await fetchJson(`/api/business-pulse/investigations/${firstAlert.id}`);
+    document.getElementById('investigation-content').innerHTML = `
+      <p>${escapeHtml(investigation.summary || 'No investigation results available.')}</p>
+      <ul>${(investigation.possible_factors || []).map(item => `<li>${escapeHtml(item)}</li>`).join('') || '<li>No contributing factors identified.</li>'}</ul>
+      <small>${escapeHtml(investigation.limitations || 'No limitation data available.')}</small>
+    `;
+  } else {
+    document.getElementById('investigation-content').innerHTML = '<p>No alert investigation is available for this range.</p>';
+  }
+}
+
+pulseDays.addEventListener('change', () => loadPulse().catch(showPulseError));
+document.getElementById('recommendation-list').addEventListener('click', async event => {
+  const button = event.target.closest('[data-recommendation-id]');
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await fetchJson(`/api/business-pulse/recommendations/${button.dataset.recommendationId}/status`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+      body: JSON.stringify({status: button.dataset.status})
+    });
+    await     loadPulse().catch(showPulseError);
+  } catch (error) {
+    button.disabled = false;
+    showPulseError(error);
+  }
+});
+document.getElementById('alert-list').addEventListener('click', async event => {
+  const button = event.target.closest('[data-alert-id]');
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await fetchJson(`/api/business-pulse/alerts/${button.dataset.alertId}/status`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+      body: JSON.stringify({status: button.dataset.status})
+    });
+    await loadPulse();
+  } catch (error) {
+    button.disabled = false;
+    showPulseError(error);
+  }
+});
+document.getElementById('scenario-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const payload = Object.fromEntries(formData.entries());
+  for (const field of ['order_change', 'aov_change', 'repeat_change', 'inactivity_change', 'category_change']) {
+    payload[field] = Number(payload[field]);
+  }
+  try {
+    const response = await fetchJson('{{ url_for("scenarios_api") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+      body: JSON.stringify(payload)
+    });
+    const result = response.result;
+    document.getElementById('scenario-result').innerHTML = `
+      <div class="scenario-box">
+        <h4>${escapeHtml(payload.scenario_name)} · planning estimate</h4>
+        <div class="scenario-metrics">
+          <span>Baseline<strong>${money(result.baseline_revenue)}</strong></span>
+          <span>Estimate<strong>${money(result.hypothetical_revenue)}</strong></span>
+          <span>Change<strong>${Number(result.percentage_difference).toFixed(2)}%</strong></span>
+        </div>
+        <small>${escapeHtml(result.scenario_limitations)}</small>
+      </div>`;
+    await loadPulse();
+  } catch (error) {
+    showPulseError(error);
+  }
+});
+
+function showPulseError(error) {
+  document.getElementById('pulse-message').textContent = error.message || 'The business pulse could not be refreshed.';
+}
+
+loadPulse().catch(showPulseError);
+</script>
+{% endblock %}

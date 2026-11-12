@@ -1,0 +1,194 @@
+{% extends 'layout.html' %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <p class="eyebrow">BUSINESS INTELLIGENCE · LIVE</p>
+    <h2><span id="company-name-heading">{{ company.name if company else 'Company' }}</span> overview</h2>
+    <p class="muted-copy">Welcome back, {{ user.full_name or user.username }}. Private company actuals and forecasts for your admin account.</p>
+  </div>
+  <button id="export-button" class="button-link" type="button">Export CSV</button>
+</div>
+
+<section class="panel filter-panel">
+  <form id="date-filter-form" class="date-filter">
+    <label for="days">Quick range</label>
+    <select id="days" name="days">
+      <option value="7">Last 7 days</option>
+      <option value="30" selected>Last 30 days</option>
+      <option value="90">Last 90 days</option>
+      <option value="365">Last 12 months</option>
+    </select>
+    <label for="start-date">From</label>
+    <input id="start-date" name="start_date" type="date" />
+    <label for="end-date">To</label>
+    <input id="end-date" name="end_date" type="date" />
+    <button class="primary-btn" type="submit">Apply</button>
+  </form>
+</section>
+
+<section class="panel company-tools">
+  <div class="panel-header">
+    <div>
+      <p class="eyebrow">ADMIN · PRIVATE WORKSPACE</p>
+      <h3>Company workspace</h3>
+      <p class="muted-copy">Your company data is private to this administrator workspace.</p>
+    </div>
+    <div class="download-actions">
+      <a class="button-link" href="{{ url_for('company_demo_transactions') }}">Download demo CSV</a>
+      <a class="text-link" href="{{ url_for('company_import_template') }}">Blank CSV template</a>
+    </div>
+  </div>
+  <div class="company-tools-grid">
+    <form id="company-profile-form" class="company-profile-form">
+      <label for="company-name">Company name</label>
+      <div class="inline-form">
+        <input id="company-name" name="company_name" maxlength="120" value="{{ company.name if company else '' }}" required />
+        <button class="small-btn" type="submit">Save company</button>
+      </div>
+      <small class="muted-copy">The company name labels this workspace; revenue comes only from your imported transactions.</small>
+    </form>
+    <form id="transaction-import-form" class="transaction-import-form">
+      <label for="transaction-file">Import company transactions</label>
+      <div class="inline-form">
+        <input id="transaction-file" name="file" type="file" accept=".csv,text/csv" aria-describedby="csv-import-details" required />
+        <button class="small-btn" type="submit">Import CSV</button>
+      </div>
+      <div id="csv-import-details" class="import-help">
+        <strong>Quick start</strong>
+        <ol>
+          <li>Download the demo CSV to preview working example data, or use the blank template.</li>
+          <li>Keep the header row. Fill in one transaction per row and save as CSV UTF-8.</li>
+          <li>Select the CSV and click <b>Import CSV</b>. The dashboard refreshes after a successful import.</li>
+        </ol>
+        <p><b>Required columns:</b> <code>date</code> (YYYY-MM-DD), <code>customer</code>, <code>product</code>, <code>quantity</code>, <code>unit_price</code>, <code>revenue</code>, and <code>profit</code>.</p>
+        <p><b>Optional columns:</b> <code>category</code>, <code>region</code>, <code>segment</code>, and <code>status</code>.</p>
+        <p class="demo-warning">Demo rows are fictional examples. Importing the same CSV again adds those transactions again—do not re-import unless you want duplicate demo sales in your totals. Limit: 5 MB / 5,000 rows.</p>
+      </div>
+      <div id="import-status" class="inline-status" role="status"></div>
+    </form>
+  </div>
+</section>
+
+<section class="panel company-finance">
+  <div class="panel-header">
+    <div><h3>Monthly revenue &amp; profit outlook</h3><p class="muted-copy">Current month actuals and six-month planning estimates from your company’s history.</p></div>
+    <span id="monthly-forecast-confidence" class="badge">Loading forecast</span>
+  </div>
+  <div class="finance-summary">
+    <div><span>Revenue this month</span><strong id="current-month-revenue">$0.00</strong></div>
+    <div><span>Profit this month</span><strong id="current-month-profit">$0.00</strong></div>
+    <div><span>Orders this month</span><strong id="current-month-orders">0</strong></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Month</th><th>Forecast revenue</th><th>Forecast profit</th><th>Confidence</th></tr></thead>
+      <tbody id="monthly-forecast-body"></tbody>
+    </table>
+  </div>
+  <small id="forecast-notice" class="muted-copy"></small>
+</section>
+
+<div id="dashboard-message" class="status-banner" role="status" hidden></div>
+
+<div class="kpi-grid">
+  <div class="kpi-card accent-blue">
+    <span>Total Revenue</span>
+    <strong id="kpi-revenue">$0.00</strong>
+  </div>
+  <div class="kpi-card accent-green">
+    <span>Total Orders</span>
+    <strong id="kpi-orders">0</strong>
+  </div>
+  <div class="kpi-card accent-purple">
+    <span>Total Customers</span>
+    <strong id="kpi-customers">0</strong>
+  </div>
+  <div class="kpi-card accent-orange">
+    <span>Total Profit</span>
+    <strong id="kpi-profit">$0.00</strong>
+  </div>
+  <div class="kpi-card accent-red">
+    <span>Average Order Value</span>
+    <strong id="kpi-aov">$0.00</strong>
+  </div>
+  <div class="kpi-card accent-slate">
+    <span>Sales Growth</span>
+    <strong id="kpi-growth">0%</strong>
+  </div>
+</div>
+
+<div class="panel-grid-grid">
+  <section id="forecast-panel" class="panel card-span-2">
+    <div class="panel-header">
+      <div><h3>Revenue trend &amp; 7-day outlook</h3><p class="muted-copy">Daily sales with a trend-based planning estimate</p></div>
+      <span id="forecast-confidence" class="badge">Forecast loading</span>
+    </div>
+    <canvas id="monthlyChart"></canvas>
+  </section>
+  <section class="panel">
+    <div class="panel-header"><h3>Revenue by Category</h3></div>
+    <canvas id="categoryChart"></canvas>
+  </section>
+  <section class="panel">
+    <div class="panel-header"><h3>Top Products</h3></div>
+    <canvas id="productChart"></canvas>
+  </section>
+  <section class="panel">
+    <div class="panel-header"><h3>Revenue by Region</h3></div>
+    <canvas id="regionChart"></canvas>
+  </section>
+  <section class="panel card-span-2">
+    <div class="panel-header"><h3>Recent Transactions</h3></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Order</th><th>Date</th><th>Customer</th><th>Product</th><th>Revenue</th><th>Status</th></tr>
+        </thead>
+        <tbody id="recent-transactions-body"></tbody>
+      </table>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-header"><h3>Business alerts</h3><a href="{{ url_for('business_pulse_page') }}" class="text-link">View all</a></div>
+    <div id="dashboard-alerts" class="alert-list"></div>
+  </section>
+  <section id="customer-health" class="panel card-span-2">
+    <div class="panel-header">
+      <div><h3>Customer segments &amp; churn watch</h3><p class="muted-copy">Recent spend and time since last order help spot retention risks.</p></div>
+      <span id="at-risk-count" class="badge">Loading customer health</span>
+    </div>
+    <div class="customer-health-grid">
+      <div>
+        <h4>Top customers</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Customer</th><th>Segment</th><th>Orders</th><th>Revenue</th><th>Health</th></tr></thead>
+            <tbody id="top-customers-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h4>Retention watch</h4>
+        <div id="churn-watch-list"></div>
+        <small class="muted-copy">At risk after 45 days; inactive after 90 days without an order.</small>
+      </div>
+    </div>
+  </section>
+</div>
+
+<section class="panel pulse-panel">
+  <div class="panel-header">
+    <h3>AI Business Pulse</h3>
+    <a href="{{ url_for('business_pulse_page') }}" class="button-link">Open detailed analysis</a>
+  </div>
+  <div id="pulse-summary"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+{% endblock %}

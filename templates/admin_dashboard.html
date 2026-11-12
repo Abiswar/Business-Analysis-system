@@ -1,0 +1,19 @@
+{% extends 'layout.html' %}
+
+{% block page_title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<h2>Administrator Dashboard</h2>
+<div class="admin-grid">
+  <div class="admin-card">
+    <h3>Operations</h3>
+    <p>Monitor financial activity, customer health and business alerts.</p>
+    <a class="button-link" href="{{ url_for('business_pulse_page') }}">Open AI Business Pulse</a>
+  </div>
+  <div class="admin-card">
+    <h3>System Summary</h3>
+    <p>View KPI, demand changes and forecast quality across the organization.</p>
+    <a class="button-link" href="{{ url_for('user_dashboard') }}">View Analytics Dashboard</a>
+  </div>
+</div>
+{% endblock %}
